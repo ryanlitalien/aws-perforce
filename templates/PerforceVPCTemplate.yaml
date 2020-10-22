@@ -28,7 +28,7 @@ Resources:
       CidrBlock: 10.0.0.0/16
       InstanceTenancy: default
       EnableDnsSupport: 'true'
-      EnableDnsHostnames: 'false'
+      EnableDnsHostnames: 'true'
       Tags:
       - Key: Name
         Value: Perforce
@@ -41,6 +41,7 @@ Resources:
         - Fn::GetAZs: !Ref 'AWS::Region'  
       VpcId:
         Ref: PerforceVPC
+      MapPublicIpOnLaunch: 'true'
       Tags:
       - Key: Name
         Value: Perforce-Public-Subnet-Master
@@ -201,6 +202,15 @@ Resources:
       FromPort: '1666'
       ToPort: '1666'
       SourceSecurityGroupId: !Ref sgPerforceSG
+  ingress7:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref sgPerforceSG
+      IpProtocol: tcp
+      FromPort: '3389'
+      ToPort: '3389'
+      CidrIp: !Ref AccessCIDR
+
   egress1:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:

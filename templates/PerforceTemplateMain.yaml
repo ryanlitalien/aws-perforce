@@ -4,13 +4,14 @@ Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups:
       - Label:
-          default: ' VPC Network Configuration'
+          default: 'VPC Network Configuration'
         Parameters:
           - AccessCIDR
       - Label: 
           default: "Perforce Server Configuration"
         Parameters: 
           - InstanceType
+          - WorkstationInstanceType
           - KeyPairName
           - DepotVolumeType
           - DepotVolumeSize
@@ -19,7 +20,9 @@ Metadata:
           - MetadataVolumeSize
           - MetadataProvisionedIops
           - LatestAmiId
+          - LatestWorkstationAmiId
           - EnableReplica
+          - EnableWorkstation
       - Label:
           default: "AWS CloudFormation Template Source Configuration"
         Parameters:
@@ -31,6 +34,8 @@ Metadata:
         default: Permitted IP range
       InstanceType: 
         default: "Instance Type"
+      WorkstationInstanceType:
+        default: "Workstation Instance Type"
       KeyPairName:
         default: "Key Pair Name"
       DepotVolumeType:
@@ -46,9 +51,13 @@ Metadata:
       MetadataProvisionedIops:
         default: "Provisioned IOPS for Metadata Volume"
       LatestAmiId:
-        default: "Latest AMI ID for Amazon Linux2"
+        default: "Latest AMI ID for Perforce Helix Core"
+      LatestWorkstationAmiId:
+        default: "Latest AMI ID for Perforce Helix Core / Unreal Workstation"
       EnableReplica:
         default: "Enable Replica"
+      EnableWorkstation:
+        default: "Enable Workstation"
       QSS3BucketName:
         default: "Template S3 Bucket Name"
       QSS3BucketRegion:
@@ -89,13 +98,27 @@ Parameters:
       - m5.4xlarge
       - m5.8xlarge
     Description: "Select Perforce server EC2 instance type. Default is c5.4xlarge."
+  WorkstationInstanceType:
+    Type: String
+    Default: g3.4xlarge
+    AllowedValues:
+      - g3s.xlarge
+      - g3.4xlarge
+      - g3.8xlarge
+      - g3.16xlarge
+    Description: "Select Workstation EC2 instance type. Default is g3.4xlarge."
   KeyPairName:
     ConstraintDescription: "You must specify the name of an existing EC2 KeyPair."
     Description: "Public/private key pairs allow you to securely connect to your instance after it launches"
     Type: AWS::EC2::KeyPair::KeyName
   LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Type: String
+    Default: "ami-08a702a5b23838980"
+    Description: "Perforce-Helix-Core-AMI-Base-2020.1"
+  LatestWorkstationAmiId:
+    Type: String
+    Default: "ami-059ac5410b2a0c8b9"
+    Description: "Perforce-Helix-Core-Workstation-AMI-Template-Base-2020.1"
   EnableReplica:
     Type: String
     Default: "No"
@@ -103,9 +126,16 @@ Parameters:
       - "Yes"
       - "No"
     Description: "If you build Perforce Replica Server, select Yes. Replica Server will be the same setting as Master server."
+  EnableWorkstation:
+    Type: String
+    Default: "Yes"
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Description: "Enable a remote Windows 2019 workstation with Unreal Engine and P4V."
   DepotVolumeType:
     Type: String
-    Default: st1
+    Default: gp2
     AllowedValues: 
       - st1
       - gp2
@@ -163,6 +193,7 @@ Parameters:
 
 Conditions: 
   CreateReplicaServer: !Equals [ !Ref EnableReplica, "Yes" ]
+  CreateWorkstation: !Equals [ !Ref EnableWorkstation, "Yes" ]
   UsingDefaultBucket: !Equals [!Ref QSS3BucketName, 'gametech-cfn-templates-public']
   GovCloudCondition: !Equals [!Ref 'AWS::Region', us-gov-west-1]
 
@@ -201,6 +232,25 @@ Resources:
         PerforceSecurityGroup: !GetAtt PerforceVPCStack.Outputs.PerforceSecurityGroupId
         gw1: !GetAtt PerforceVPCStack.Outputs.PerforceVPCGatewaySettingID
         EC2Profile: !GetAtt PerforceVPCStack.Outputs.EC2ProfileID
+  # Create Perforce / Unreal workstation if needed
+  PerforceCreateWorkstation:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateWorkstation
+    Properties:
+      TemplateURL: !Sub "https://${QSS3BucketName}.s3.${QSS3BucketRegion}.amazonaws.com/${QSS3KeyPrefix}templates/PerforceWorkstation.yaml"
+      Parameters:
+        PerforceAZ: !Select
+          - 0
+          - Fn::GetAZs: !Ref 'AWS::Region'
+        LatestAmiId: !Ref LatestWorkstationAmiId
+        InstanceType: !Ref WorkstationInstanceType
+        KeyPairName: !Ref KeyPairName
+        ServerName: "p4-workstation-01"
+        ServerDescription: "Perforce Workstation for Unreal Engine + P4V"
+        ServerID: "p4-workstation-01"
+        SubnetId: !GetAtt PerforceVPCStack.Outputs.PerforceMasterSubnetId
+        PerforceSecurityGroup: !GetAtt PerforceVPCStack.Outputs.PerforceSecurityGroupId
+        EC2Profile: !GetAtt PerforceVPCStack.Outputs.EC2ProfileID
   # Create Perforce replica server if needed
   PerforceReplicaServerInstance:
     Type: AWS::CloudFormation::Stack
@@ -224,18 +274,18 @@ Resources:
         MetadataVolumeSize: !Ref MetadataVolumeSize
         MetadataProvisionedIops: !Ref MetadataProvisionedIops
         SubnetId: !GetAtt PerforceVPCStack.Outputs.PerforceReplicaSubnetId
-        PrivateIpAddress: 10.0.1.63
+        PrivateIpAddress: 10.0.1.64
         PerforceSecurityGroup: !GetAtt PerforceVPCStack.Outputs.PerforceSecurityGroupId
         gw1: !GetAtt PerforceVPCStack.Outputs.PerforceVPCGatewaySettingID
         EC2Profile: !GetAtt PerforceVPCStack.Outputs.EC2ProfileID
 
 Outputs:
   PerforceMasterEIP:
-    Description: Elasic IP Adress attached to Perforce Master server
+    Description: Elastic IP Adress attached to Perforce Master server
     Value: !GetAtt PerforceMasterServerInstance.Outputs.PerforceEIP
   PerforceReplicaEIP:
     Condition: CreateReplicaServer
-    Description: Elasic IP Adress attached to Perforce Replica server
+    Description: Elastic IP Adress attached to Perforce Replica server
     Value: !GetAtt PerforceReplicaServerInstance.Outputs.PerforceEIP
   PerforceMasterInstanceId:
     Description: InstanceId of the newly created EC2 instance

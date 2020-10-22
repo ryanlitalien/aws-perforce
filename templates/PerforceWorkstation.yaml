@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Create Perforce Servers"
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: g3.4xlarge
+    AllowedValues:
+      - g3s.xlarge
+      - g3.4xlarge
+      - g3.8xlarge
+      - g3.16xlarge
+    Description: "Select Workstation EC2 instance type. Default is g3.4xlarge."
+  KeyPairName:
+    Description: "Public/private key pairs allow you to securely connect to your instance after it launches"
+    Type: AWS::EC2::KeyPair::KeyName
+  LatestAmiId:
+    Type: "String"
+    Default: "ami-059ac5410b2a0c8b9"
+    Description: "Perforce-Helix-Core-Workstation-AMI-Template-Base-2020.1"
+  PerforceAZ:
+    Type: "String"
+  ServerName:
+    Type: "String"
+  ServerDescription:
+    Type: "String"
+  ServerID:
+    Type: "String"
+  SubnetId:
+    Type: "String"
+  PerforceSecurityGroup:
+    Type: "String"
+  EC2Profile:
+    Type: "String"
+    Description: "EC2 profile setting for IAM role"
+
+Resources:
+  # EC2 Workstation
+  PerforceWorkstationInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: !Ref PerforceAZ
+      DisableApiTermination: 'false'
+      InstanceInitiatedShutdownBehavior: stop
+      EbsOptimized: 'true'
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      Monitoring: 'true'
+      IamInstanceProfile: !Ref EC2Profile
+      Tags:
+        - Key: Name
+          Value: !Ref ServerName
+        - Key: Description
+          Value: !Ref ServerDescription
+        - Key: ServerID
+          Value: !Ref ServerID
+      NetworkInterfaces:
+        - DeleteOnTermination: 'true'
+          Description: Primary network interface
+          DeviceIndex: 0
+          SubnetId: !Ref SubnetId
+          GroupSet:
+            - !Ref PerforceSecurityGroup
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash
+          hostname ${ServerID}
+
+          # Install packages
+          yum -y update
+
+          yum -y install aws-cfn-bootstrap
+          # Install the files and packages from the metadata
+          # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-init.html
+          /opt/aws/bin/cfn-init -v --configsets default --stack ${AWS::StackName} --resource PerforceWorkstationInstance --region ${AWS::Region}
+          # Signal the status from cfn-init
+          # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/cfn-signal.html
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource PerforceWorkstationInstance --region ${AWS::Region}
+
+Outputs:
+  EC2InstanceId:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !Ref PerforceWorkstationInstance
