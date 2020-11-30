@@ -4,7 +4,7 @@ Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups:
       - Label:
-          default: ' VPC Network Configuration'
+          default: 'VPC Network Configuration'
         Parameters:
           - AccessCIDR
       - Label: 
@@ -94,8 +94,9 @@ Parameters:
     Description: "Public/private key pairs allow you to securely connect to your instance after it launches"
     Type: AWS::EC2::KeyPair::KeyName
   LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Type: String
+    Default: "ami-08a702a5b23838980"
+    Description: "Perforce-Helix-Core-AMI-Base-2020.1"
   EnableReplica:
     Type: String
     Default: "No"
@@ -231,11 +232,11 @@ Resources:
 
 Outputs:
   PerforceMasterEIP:
-    Description: Elasic IP Adress attached to Perforce Master server
+    Description: Elastic IP Adress attached to Perforce Master server
     Value: !GetAtt PerforceMasterServerInstance.Outputs.PerforceEIP
   PerforceReplicaEIP:
     Condition: CreateReplicaServer
-    Description: Elasic IP Adress attached to Perforce Replica server
+    Description: Elastic IP Adress attached to Perforce Replica server
     Value: !GetAtt PerforceReplicaServerInstance.Outputs.PerforceEIP
   PerforceMasterInstanceId:
     Description: InstanceId of the newly created EC2 instance

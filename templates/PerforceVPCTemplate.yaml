@@ -28,7 +28,7 @@ Resources:
       CidrBlock: 10.0.0.0/16
       InstanceTenancy: default
       EnableDnsSupport: 'true'
-      EnableDnsHostnames: 'false'
+      EnableDnsHostnames: 'true'
       Tags:
       - Key: Name
         Value: Perforce
